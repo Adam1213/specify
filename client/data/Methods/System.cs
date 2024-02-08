@@ -38,19 +38,19 @@ public static partial class Cache
             Region region = Region.System;
             await StartRegion(region);
 
-            systemTaskList.Add(GetEnvironmentVariables());
-            systemTaskList.Add(GetSystemWMIInfo());
-            systemTaskList.Add(CheckCommercialOneDrive());
-            systemTaskList.Add(GetInstalledApps());
-            systemTaskList.Add(GetScheduledTasks());
-            systemTaskList.Add(GetStartupTasks());
-            systemTaskList.Add(RegistryCheck());
-            systemTaskList.Add(GetMicroCodes());
-            systemTaskList.Add(GetStaticCoreCount());
-            systemTaskList.Add(GetBrowserExtensions());
-            systemTaskList.Add(GetMiniDumps());
-            systemTaskList.Add(GetDefaultBrowser());
-            systemTaskList.Add(GetProcesses());
+            systemTaskList.Add(Task.Run(GetEnvironmentVariables));
+            systemTaskList.Add(Task.Run(GetSystemWMIInfo));
+            systemTaskList.Add(Task.Run(CheckCommercialOneDrive));
+            systemTaskList.Add(Task.Run(GetInstalledApps));
+            systemTaskList.Add(Task.Run(GetScheduledTasks));
+            systemTaskList.Add(Task.Run(GetStartupTasks));
+            systemTaskList.Add(Task.Run(RegistryCheck));
+            systemTaskList.Add(Task.Run(GetMicroCodes));
+            systemTaskList.Add(Task.Run(GetStaticCoreCount));
+            systemTaskList.Add(Task.Run(GetBrowserExtensions));
+            systemTaskList.Add(Task.Run(GetMiniDumps));
+            systemTaskList.Add(Task.Run(GetDefaultBrowser));
+            systemTaskList.Add(Task.Run(GetProcesses));
 
             // Check if username contains non-alphanumeric characters
             UsernameSpecialCharacters = !Regex.IsMatch(Environment.UserName, @"^[a-zA-Z0-9]+$");

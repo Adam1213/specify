@@ -30,12 +30,12 @@ public static partial class Cache
             List<Task> hardwareTaskList = new();
             await StartRegion(region);
 
-            hardwareTaskList.Add(GetTemps());
-            hardwareTaskList.Add(GetHardwareWmiData());
-            hardwareTaskList.Add(GetMonitorInfo());
-            hardwareTaskList.Add(GetSMBiosMemoryInfo());
-            hardwareTaskList.Add(GetDiskDriveData());
-            hardwareTaskList.Add(GetBatteryData());
+            hardwareTaskList.Add(Task.Run(GetTemps));
+            hardwareTaskList.Add(Task.Run(GetHardwareWmiData));
+            hardwareTaskList.Add(Task.Run(GetMonitorInfo));
+            hardwareTaskList.Add(Task.Run(GetSMBiosMemoryInfo));
+            hardwareTaskList.Add(Task.Run(GetDiskDriveData));
+            hardwareTaskList.Add(Task.Run(GetBatteryData));
 
             await Task.WhenAll(hardwareTaskList);
 

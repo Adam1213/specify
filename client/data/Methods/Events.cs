@@ -26,8 +26,8 @@ public static partial class Cache
             Region region = Region.Events;
             await StartRegion(region);
 
-            eventTaskList.Add(GetUnexpectedShutdowns());
-            eventTaskList.Add(GetWheaEvents());
+            eventTaskList.Add(Task.Run(GetUnexpectedShutdowns));
+            eventTaskList.Add(Task.Run(GetWheaEvents));
 
             await Task.WhenAll(eventTaskList);
             await EndRegion(region);
