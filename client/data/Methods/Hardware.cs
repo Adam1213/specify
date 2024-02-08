@@ -317,12 +317,21 @@ public static partial class Cache
             }
         }
 
-        // Gather Extended Display Identification Data
-        await GetEdidData();
+        try
+        {
+            // Gather Extended Display Identification Data
+            await GetEdidData();
+        }
+        catch (Exception e)
+        {
+            LogEvent("Failed to read Edid data from WMI in GetMonitorInfo()", Region.Hardware, EventType.ERROR);
+            LogEvent($"{e}", Region.Hardware);
+        }
 
         await CloseTask(Region.Hardware, taskName);
         MonitorInfo = monitors;
     }
+
     private static async Task GetEdidData()
     {
         // Initialize the list.
