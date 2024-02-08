@@ -5,12 +5,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
+using System.Collections.Concurrent;
 
 namespace specify_client;
 
 public static class DebugLog
 {
-    
+
     public static string LogText;
     public static readonly int[] ErrorCount = new int[7];
     private static bool Started = false;
@@ -20,7 +21,7 @@ public static class DebugLog
     private static readonly bool[] RegionStarted = new bool[6];
     private static readonly bool[] RegionCompleted = new bool[6];
     private static readonly DateTime[] RegionStartTime = new DateTime[6];
-    private static Dictionary<string, DateTime>[] OpenTasks = new Dictionary<string, DateTime>[6];
+    private static ConcurrentDictionary<string, DateTime>[] OpenTasks = new ConcurrentDictionary<string, DateTime>[6];
 
     private static SemaphoreSlim logSemaphore = new(1, 1);
 
@@ -33,7 +34,7 @@ public static class DebugLog
         Hardware = 4,
         Events = 5,
         Misc = 6
-        
+
     }
 
     public enum EventType
@@ -48,7 +49,7 @@ public static class DebugLog
     {
         if (!OpenTasks[(int)region].ContainsKey(taskName))
         {
-            OpenTasks[(int)region].Add(taskName, DateTime.Now);
+            OpenTasks[(int)region].TryAdd(taskName, DateTime.Now);
             await LogEventAsync($"Task Started: {taskName}", region);
         }
         // Ensure OpenTask hasn't been called twice on the same task.
@@ -62,8 +63,8 @@ public static class DebugLog
         if (OpenTasks[(int)region].ContainsKey(taskName))
         {
             await LogEventAsync($"Task Completed: {taskName} - Runtime: {(DateTime.Now - OpenTasks[(int)region][taskName]).TotalMilliseconds}", region);
-            OpenTasks[(int)region].Remove(taskName);
-            
+            OpenTasks[(int)region].TryRemove(taskName, out _);
+
         }
         // Ensure CloseTask hasn't been called on a task that was never opened, or called twice on the same task.
         else
@@ -77,14 +78,14 @@ public static class DebugLog
     /// <returns></returns>
     public static void CheckOpenTasks()
     {
-        for(int i = 0; i < OpenTasks.Count(); i++)
+        for (int i = 0; i < OpenTasks.Count(); i++)
         {
             Region region = (Region)i;
             var section = OpenTasks[i];
-            if(section.Count > 0)
+            if (section.Count > 0)
             {
                 LogEvent($"{region} has outstanding tasks:", region, EventType.ERROR);
-                foreach(var task in section)
+                foreach (var task in section)
                 {
                     LogEvent($"OUTSTANDING: {task.Key}", region);
                 }
@@ -196,9 +197,9 @@ public static class DebugLog
                     writer.Close();
                     break;
                 }
-                catch (Exception ex) 
+                catch (Exception ex)
                 {
-                    if(retryCount > 10)
+                    if (retryCount > 10)
                     {
                         File.WriteAllText(LogFailureFilePath, ex.ToString());
                         Settings.EnableDebug = false;
