@@ -45,6 +45,33 @@ public static class DebugLog
         ERROR = 3,
         REGION_END = 4
     }
+
+    public static async Task DoTask(Region region, string taskName, Action task)
+    {
+        await OpenTask(region, taskName);
+        try
+        {
+            task.Invoke();
+        }
+        finally
+        {
+            await CloseTask(region, taskName);
+        }
+    }
+
+    public static async Task DoTask(Region region, string taskName, Func<Task> task)
+    {
+        await OpenTask(region, taskName);
+        try
+        {
+            await Task.Factory.StartNew(task, CancellationToken.None, TaskCreationOptions.DenyChildAttach, TaskScheduler.Default);
+        }
+        finally
+        {
+            await CloseTask(region, taskName);
+        }
+    }
+
     public static async Task OpenTask(Region region, string taskName)
     {
         if (!OpenTasks[(int)region].ContainsKey(taskName))

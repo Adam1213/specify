@@ -26,8 +26,8 @@ public static partial class Cache
             Region region = Region.Events;
             await StartRegion(region);
 
-            eventTaskList.Add(Task.Run(GetUnexpectedShutdowns));
-            eventTaskList.Add(Task.Run(GetWheaEvents));
+            eventTaskList.Add(DoTask(region, "GetUnexpectedShutdowns", GetUnexpectedShutdowns));
+            eventTaskList.Add(DoTask(region, "GetWheaEvents", GetWheaEvents));
 
             await Task.WhenAll(eventTaskList);
             await EndRegion(region);
@@ -39,9 +39,6 @@ public static partial class Cache
     }
     public static async Task GetUnexpectedShutdowns()
     {
-        string TaskName = "GetUnexpectedShutdowns";
-        await OpenTask(Region.Events, TaskName);
-
         string eventLogName = "System";
         int targetEventId = 41;
         string query = $"*[System[EventID={targetEventId}]]";
@@ -103,13 +100,9 @@ public static partial class Cache
                 UnexpectedShutdowns.Add(shutdown);
             }
         }
-        await CloseTask(Region.Events, TaskName);
     }
     public static async Task GetWheaEvents()
     {
-        var taskName = "GetWheaEvents";
-        await OpenTask(Region.Events, taskName);
-
         string eventLogName = "System";
         string eventSource = "Microsoft-Windows-WHEA-Logger";
         string query = $"*[System/Provider[@Name=\"{eventSource}\"]]";
@@ -167,7 +160,6 @@ public static partial class Cache
                 }
             }
         }
-        await CloseTask(Region.Events, taskName);
     }
     public static MachineCheckException MakeMachineCheckException(XmlNode dataNode)
     {
