@@ -70,7 +70,7 @@ public static class DebugLog
         await OpenTask(region, taskName);
         try
         {
-            await Task.Factory.StartNew(task, CancellationToken.None, TaskCreationOptions.DenyChildAttach, TaskScheduler.Default);
+            await task();
         }
         finally
         {
@@ -151,9 +151,9 @@ public static class DebugLog
                 await LogEventAsync($"Logging completed with unfinished region: {region.Key}", region.Key, EventType.ERROR);
             }
             if (region.Value.errorCount > 0)
-        {
+            {
                 await LogEventAsync($"{region.Key} Data Errors: {region.Value.errorCount}");
-        }
+            }
         }
 
         await LogEventAsync($"Total Elapsed Time: {(DateTime.Now - LogStartTime).TotalMilliseconds}");
@@ -185,10 +185,10 @@ public static class DebugLog
         if (StartedRegions.TryGetValue(region, out var regionStats))
         {
             if (regionStats.EndTime.HasValue)
-        {
-            await LogEventAsync($"Region already completed.", region, EventType.ERROR);
-            return;
-        }
+            {
+                await LogEventAsync($"Region already completed.", region, EventType.ERROR);
+                return;
+            }
 
             await LogEventAsync($"{region} Region End - Total Time: {(finishTime - regionStats.startTime).TotalMilliseconds}ms", region, EventType.REGION_END);
             regionStats.EndTime = finishTime;
