@@ -305,7 +305,7 @@ public class Monolith
             BootState = (string)cs["BootupState"];
             SMBiosRamInformation = Cache.SMBiosRamInfo;
             WriteSuccess = Cache.MainDataWriteSuccess;
-            ErrorCount = DebugLog.ErrorCount[(int)DebugLog.Region.Main];
+            ErrorCount = DebugLog.GetErrorCountForRegion(DebugLog.Region.Main);
         }
     }
 
@@ -329,7 +329,7 @@ public class Monolith
             Tpm = Cache.Tpm;
             UacLevel = Cache.UacLevel;
             WriteSuccess = Cache.SecurityWriteSuccess;
-            ErrorCount = DebugLog.ErrorCount[(int)DebugLog.Region.Security];
+            ErrorCount = DebugLog.GetErrorCountForRegion(DebugLog.Region.Security);
         }
     }
 
@@ -367,7 +367,7 @@ public class Monolith
             Temperatures = Cache.Temperatures;
             Batteries = Cache.Batteries;
             WriteSuccess = Cache.HardwareWriteSuccess;
-            ErrorCount = DebugLog.ErrorCount[(int)DebugLog.Region.Hardware];
+            ErrorCount = DebugLog.GetErrorCountForRegion(DebugLog.Region.Hardware);
         }
     }
 
@@ -423,7 +423,7 @@ public class Monolith
             PageFile = Cache.PageFile;
             WriteSuccess = Cache.SystemWriteSuccess;
             LastBiosTime = Cache.LastBiosTime;
-            ErrorCount = DebugLog.ErrorCount[(int)DebugLog.Region.System];
+            ErrorCount = DebugLog.GetErrorCountForRegion(DebugLog.Region.System);
         }
     }
 
@@ -449,7 +449,7 @@ public class Monolith
             HostsFile = Cache.HostsFile;
             HostsFileHash = Cache.HostsFileHash;
             WriteSuccess = Cache.NetworkWriteSuccess;
-            ErrorCount = DebugLog.ErrorCount[(int)DebugLog.Region.Networking];
+            ErrorCount = DebugLog.GetErrorCountForRegion(DebugLog.Region.Networking);
             ReceiveSideScaling = Cache.ReceiveSideScaling;
             AutoTuningLevelLocal = Cache.AutoTuningLevelLocal;
         }

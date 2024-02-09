@@ -9,19 +9,23 @@ using System.Collections.Concurrent;
 
 namespace specify_client;
 
+public class RegionStats
+{
+    public DateTime startTime;
+    public DateTime? EndTime { get; set; }
+    public int errorCount;
+}
+
 public static class DebugLog
 {
 
     public static string LogText;
-    public static readonly int[] ErrorCount = new int[7];
     private static bool Started = false;
     private static DateTime LogStartTime { get; set; }
     private const string LogFilePath = "specify_debug.log";
     private const string LogFailureFilePath = "specify_log_failure.log";
-    private static readonly bool[] RegionStarted = new bool[6];
-    private static readonly bool[] RegionCompleted = new bool[6];
-    private static readonly DateTime[] RegionStartTime = new DateTime[6];
-    private static readonly ConcurrentDictionary<(Region region,string taskName), DateTime> OpenedTasks = new();
+    private static readonly ConcurrentDictionary<Region, RegionStats> StartedRegions = new();
+    private static readonly ConcurrentDictionary<(Region region, string taskName), DateTime> OpenedTasks = new();
 
     private static SemaphoreSlim logSemaphore = new(1, 1);
 
@@ -45,6 +49,8 @@ public static class DebugLog
         ERROR = 3,
         REGION_END = 4
     }
+
+    public static int GetErrorCountForRegion(Region region) => StartedRegions.TryGetValue(region, out var stats) ? stats.errorCount : 0;
 
     public static async Task DoTask(Region region, string taskName, Action task)
     {
@@ -124,15 +130,9 @@ public static class DebugLog
         {
             await Task.Run(() => File.WriteAllText(LogFilePath, ""));
         }
-        for (int i = 0; i < ErrorCount.Length; i++)
-        {
-            ErrorCount[i] = 0;
-        }
-        for (int i = 0; i < RegionStarted.Length; i++)
-        {
-            RegionStarted[i] = false;
-            RegionCompleted[i] = false;
-        }
+
+        //Initializing region start/end time and error count is unnecessary
+
         Started = true;
         await LogEventAsync($"--- DEBUG LOG STARTED {LogStartTime.ToString("HH:mm:ss")} ---");
         await LogSettings();
@@ -144,17 +144,18 @@ public static class DebugLog
         {
             return;
         }*/
-        for (int i = 0; i < RegionCompleted.Length; i++)
+        foreach (var region in StartedRegions.Where(x => !x.Value.EndTime.HasValue))
         {
-            if (!RegionCompleted[i])
+            if (!region.Value.EndTime.HasValue)
             {
-                await LogEventAsync($"Logging completed with unfinished region: {(Region)i}", (Region)i, EventType.ERROR);
+                await LogEventAsync($"Logging completed with unfinished region: {region.Key}", region.Key, EventType.ERROR);
             }
-        }
-        for (int i = 0; i < ErrorCount.Length; i++)
+            if (region.Value.errorCount > 0)
         {
-            await LogEventAsync($"{(Region)i} Data Errors: {ErrorCount[i]}");
+                await LogEventAsync($"{region.Key} Data Errors: {region.Value.errorCount}");
         }
+        }
+
         await LogEventAsync($"Total Elapsed Time: {(DateTime.Now - LogStartTime).TotalMilliseconds}");
         await LogEventAsync($"--- DEBUG LOG FINISHED {DateTime.Now.ToString("HH:mm:ss")} ---");
         Started = false;
@@ -166,29 +167,37 @@ public static class DebugLog
         {
             return;
         }*/
-        if (RegionStarted[(int)region])
+        if (!StartedRegions.TryAdd(region, new RegionStats() { startTime = DateTime.Now }))
         {
             await LogEventAsync($"{region} Region already started.", region, EventType.ERROR);
             return;
         }
-        RegionStarted[(int)region] = true;
-        RegionStartTime[(int)region] = DateTime.Now;
         await LogEventAsync($"{region} Region Start", region, EventType.REGION_START);
     }
 
     public static async Task EndRegion(Region region)
     {
+        DateTime finishTime = DateTime.Now;
         /*if(!Settings.EnableDebug)
         {
             return;
         }*/
-        if (RegionCompleted[(int)region])
+        if (StartedRegions.TryGetValue(region, out var regionStats))
+        {
+            if (regionStats.EndTime.HasValue)
         {
             await LogEventAsync($"Region already completed.", region, EventType.ERROR);
             return;
         }
-        await LogEventAsync($"{region} Region End - Total Time: {(DateTime.Now - RegionStartTime[(int)region]).TotalMilliseconds}ms", region, EventType.REGION_END);
-        RegionCompleted[(int)region] = true;
+
+            await LogEventAsync($"{region} Region End - Total Time: {(finishTime - regionStats.startTime).TotalMilliseconds}ms", region, EventType.REGION_END);
+            regionStats.EndTime = finishTime;
+            StartedRegions[region] = regionStats;
+        }
+        else
+        {
+            await LogEventAsync($"Tried to end region that was not started.", region, EventType.ERROR);
+        }
     }
 
     public static async Task LogEventAsync(string message, Region region = Region.Misc, EventType type = EventType.INFORMATION)
@@ -198,7 +207,7 @@ public static class DebugLog
             return;
         }
         string debugString = CreateDebugString(message, region, type);
-        if (region != Region.Misc && (!RegionStarted[(int)region] || RegionCompleted[(int)region]))
+        if (region != Region.Misc && (!StartedRegions.TryGetValue(region, out RegionStats stats) || stats.EndTime.HasValue))
         {
             debugString = CreateDebugString($"Logging attempted on uninitialized region - {message}", region, EventType.ERROR);
         }
@@ -241,7 +250,7 @@ public static class DebugLog
             return;
         }
         string debugString = CreateDebugString(message, region, type);
-        if (region != Region.Misc && (!RegionStarted[(int)region] || RegionCompleted[(int)region]))
+        if (region != Region.Misc && (!StartedRegions.TryGetValue(region, out RegionStats stats ) || stats.EndTime.HasValue))
         {
             debugString = CreateDebugString($"Logging attempted on uninitialized region - {message}", region, EventType.ERROR);
         }
@@ -309,7 +318,8 @@ public static class DebugLog
         if (type == EventType.ERROR)
         {
             debugString += " !!! ";
-            ErrorCount[(int)region]++;
+            
+            Interlocked.Increment(ref StartedRegions[region].errorCount);
         }
         if (type == EventType.REGION_START || type == EventType.REGION_END)
         {
