@@ -21,7 +21,7 @@ public static class DebugLog
     private static readonly bool[] RegionStarted = new bool[6];
     private static readonly bool[] RegionCompleted = new bool[6];
     private static readonly DateTime[] RegionStartTime = new DateTime[6];
-    private static ConcurrentDictionary<string, DateTime>[] OpenTasks = new ConcurrentDictionary<string, DateTime>[6];
+    private static readonly ConcurrentDictionary<(Region region,string taskName), DateTime> OpenedTasks = new();
 
     private static SemaphoreSlim logSemaphore = new(1, 1);
 
@@ -74,9 +74,8 @@ public static class DebugLog
 
     public static async Task OpenTask(Region region, string taskName)
     {
-        if (!OpenTasks[(int)region].ContainsKey(taskName))
+        if (OpenedTasks.TryAdd((region, taskName), DateTime.Now)) //Will fail if already exists
         {
-            OpenTasks[(int)region].TryAdd(taskName, DateTime.Now);
             await LogEventAsync($"Task Started: {taskName}", region);
         }
         // Ensure OpenTask hasn't been called twice on the same task.
@@ -87,11 +86,9 @@ public static class DebugLog
     }
     public static async Task CloseTask(Region region, string taskName)
     {
-        if (OpenTasks[(int)region].ContainsKey(taskName))
+        if (OpenedTasks.TryRemove((region, taskName), out DateTime startedAt)) //Will fail if already removed
         {
-            await LogEventAsync($"Task Completed: {taskName} - Runtime: {(DateTime.Now - OpenTasks[(int)region][taskName]).TotalMilliseconds}", region);
-            OpenTasks[(int)region].TryRemove(taskName, out _);
-
+            await LogEventAsync($"Task Completed: {taskName} - Runtime: {(DateTime.Now - startedAt).TotalMilliseconds}", region);
         }
         // Ensure CloseTask hasn't been called on a task that was never opened, or called twice on the same task.
         else
@@ -105,20 +102,16 @@ public static class DebugLog
     /// <returns></returns>
     public static void CheckOpenTasks()
     {
-        for (int i = 0; i < OpenTasks.Count(); i++)
+        foreach (var taskGroup in OpenedTasks.GroupBy(x => x.Key.region)) //Group by region
         {
-            Region region = (Region)i;
-            var section = OpenTasks[i];
-            if (section.Count > 0)
+            LogEvent($"{taskGroup.Key} has outstanding tasks:", taskGroup.Key, EventType.ERROR);
+            foreach (var task in taskGroup.Select(x => x.Key))
             {
-                LogEvent($"{region} has outstanding tasks:", region, EventType.ERROR);
-                foreach (var task in section)
-                {
-                    LogEvent($"OUTSTANDING: {task.Key}", region);
-                }
+                LogEvent($"OUTSTANDING: {task.taskName}", task.region);
             }
         }
     }
+
     public static async Task StartDebugLog()
     {
         LogText = "";
@@ -139,7 +132,6 @@ public static class DebugLog
         {
             RegionStarted[i] = false;
             RegionCompleted[i] = false;
-            OpenTasks[i] = new();
         }
         Started = true;
         await LogEventAsync($"--- DEBUG LOG STARTED {LogStartTime.ToString("HH:mm:ss")} ---");
