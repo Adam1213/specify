@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Management;
+using System.Threading.Tasks;
 
 namespace specify_client.data;
 
@@ -13,11 +14,11 @@ public static partial class Cache
         try
         {
             DebugLog.Region region = DebugLog.Region.Security;
-            await DebugLog.StartRegion(region);
+            DebugLog.StartRegion(region);
             AvList = AVList();
             FwList = Utils.GetWmi("FirewallProduct", "displayName", @"root\SecurityCenter2")
                 .Select(x => (string)x["displayName"]).ToList();
-            await DebugLog.LogEventAsync("Security WMI Information Retrieved.", region);
+            DebugLog.LogEvent("Security WMI Information Retrieved.", region);
 
             if (Environment.GetEnvironmentVariable("firmware_type")!.Equals("UEFI"))
             {
@@ -25,10 +26,10 @@ public static partial class Cache
                     Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\SecureBoot\State",
                     "UEFISecureBootEnabled");
 
-                if (secBootEnabled == null) await DebugLog.LogEventAsync($"Could not get UEFISecureBootEnabled value", region, DebugLog.EventType.ERROR);
+                if (secBootEnabled == null) DebugLog.LogEvent($"Could not get UEFISecureBootEnabled value", region, DebugLog.EventType.ERROR);
                 else SecureBootEnabled = secBootEnabled == 1;
             }
-            await DebugLog.LogEventAsync("SecureBoot Information Retrieved.", region);
+            DebugLog.LogEvent("SecureBoot Information Retrieved.", region);
 
             try
             {
@@ -43,26 +44,28 @@ public static partial class Cache
             catch (ManagementException)
             {
                 Tpm = null;
-                await DebugLog.LogEventAsync("Security Data: could not get TPM. This is probably because specify was not run as administrator.", region, DebugLog.EventType.WARNING);
+                DebugLog.LogEvent("Security Data: could not get TPM. This is probably because specify was not run as administrator.", region, DebugLog.EventType.WARNING);
             }
-            await DebugLog.LogEventAsync("TPM Information Retrieved.", region);
+            DebugLog.LogEvent("TPM Information Retrieved.", region);
 
             UacLevel = Utils.GetRegistryValue<int?>(
                 Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System",
                 "ConsentPromptBehaviorUser");
             var enableLua = Utils.GetRegistryValue<int?>(Registry.LocalMachine,
                 @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System", "EnableLUA");
-            if (enableLua == null) await DebugLog.LogEventAsync($"Security data: could not get EnableLUA value", region, DebugLog.EventType.ERROR);
+            if (enableLua == null) DebugLog.LogEvent($"Security data: could not get EnableLUA value", region, DebugLog.EventType.ERROR);
             else UacEnabled = enableLua == 1;
-            await DebugLog.LogEventAsync("UAC Information retrieved.", region);
+            DebugLog.LogEvent("UAC Information retrieved.", region);
 
-            await DebugLog.EndRegion(DebugLog.Region.Security);
+            DebugLog.EndRegion(DebugLog.Region.Security);
         }
         catch (Exception ex)
         {
-            await DebugLog.LogFatalError($"{ex}", DebugLog.Region.Security);
+            DebugLog.LogFatalError($"{ex}", DebugLog.Region.Security);
         }
         SecurityWriteSuccess = true;
+
+        await Task.CompletedTask;
     }
 
     public static List<string> AVList()

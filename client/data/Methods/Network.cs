@@ -19,7 +19,7 @@ public static partial class Cache
         try
         {
             DebugLog.Region region = DebugLog.Region.Networking;
-            await DebugLog.StartRegion(region);
+            DebugLog.StartRegion(region);
             NetAdapters = Utils.GetWmi("Win32_NetworkAdapterConfiguration",
                 "Description, DHCPEnabled, DHCPServer, DNSDomain, DNSDomainSuffixSearchOrder, DNSHostName, "
                 + "DNSServerSearchOrder, IPEnabled, IPAddress, IPSubnet, DHCPLeaseObtained, DHCPLeaseExpires, "
@@ -31,7 +31,7 @@ public static partial class Cache
             IPRoutes = Utils.GetWmi("Win32_IP4RouteTable",
                 "Description, Destination, Mask, NextHop, Metric1, InterfaceIndex");
 
-            await DebugLog.LogEventAsync("Networking WMI Information Retrieved.", region);
+            DebugLog.LogEvent("Networking WMI Information Retrieved.", region);
 
             GetAdapterProperties();
             CombineAdapterInformation();
@@ -47,18 +47,20 @@ public static partial class Cache
 
             HostsFile = GetHostsFile();
             HostsFileHash = GetHostsFileHash();
-            await DebugLog.LogEventAsync("Hosts file retrieved.", region);
+            DebugLog.LogEvent("Hosts file retrieved.", region);
 
             NetworkConnections = GetNetworkConnections();
-            await DebugLog.LogEventAsync("NetworkConnections Information retrieved.", region);
+            DebugLog.LogEvent("NetworkConnections Information retrieved.", region);
 
-            await DebugLog.EndRegion(DebugLog.Region.Networking);
+            DebugLog.EndRegion(DebugLog.Region.Networking);
         }
         catch (Exception ex)
         {
-            await DebugLog.LogFatalError($"{ex}", DebugLog.Region.Networking);
+            DebugLog.LogFatalError($"{ex}", DebugLog.Region.Networking);
         }
         NetworkWriteSuccess = true;
+
+        await Task.CompletedTask;
     }
 
     private static List<NetworkConnection> GetNetworkConnections()

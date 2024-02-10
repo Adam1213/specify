@@ -30,7 +30,7 @@ public class Program
 
             Time = new Stopwatch();
             Time.Start();
-            await DebugLog.StartDebugLog();
+            DebugLog.StartDebugLog();
             var pList = new ProgressList();
             pList.RunItem("MainData");
             pList.RunItem("SystemData");
@@ -42,8 +42,9 @@ public class Program
         }
         catch (Exception ex)
         {
-            await DebugLog.LogFatalError(ex.ToString(), DebugLog.Region.Misc);
+            DebugLog.LogFatalError(ex.ToString(), DebugLog.Region.Misc);
         }
 
+        await Task.CompletedTask;
     }
 }

@@ -28,7 +28,7 @@ public static partial class Cache
         {
             Region region = Region.Hardware;
             List<Task> hardwareTaskList = new();
-            await StartRegion(region);
+            StartRegion(region);
 
             hardwareTaskList.Add(DoTask(region, "GetTemps", GetTemps));
             hardwareTaskList.Add(DoTask(region, "GetHardwareWmiData", GetHardwareWmiData));
@@ -39,11 +39,11 @@ public static partial class Cache
 
             await Task.WhenAll(hardwareTaskList);
 
-            await EndRegion(Region.Hardware);
+            EndRegion(Region.Hardware);
         }
         catch (Exception ex)
         {
-            await LogFatalError($"{ex}", Region.Hardware);
+            LogFatalError($"{ex}", Region.Hardware);
         }
         HardwareWriteSuccess = true;
     }
@@ -63,7 +63,7 @@ public static partial class Cache
     }
 
     // RAM
-    private static async Task GetSMBiosMemoryInfo()
+    private static void GetSMBiosMemoryInfo()
     {
         // It may be confusing to see a task for SMBios data being closed out when WMI data was gathered instead.
         try
@@ -74,7 +74,7 @@ public static partial class Cache
             byte[] SMBios;
             if (!SMBiosObj.TryWmiRead("SMBiosData", out SMBios))
             {
-                await LogEventAsync($"SMBios information not retrieved.", Region.Hardware, EventType.ERROR);
+                LogEvent($"SMBios information not retrieved.", Region.Hardware, EventType.ERROR);
                 throw new ManagementException("MSSMBios_RawSMBiosTables returned null.");
             }
 
@@ -164,8 +164,8 @@ public static partial class Cache
         }
         catch (Exception e)
         {
-            await LogEventAsync("SMBios retrieval failed.", Region.Hardware, EventType.ERROR);
-            await LogEventAsync($"{e}");
+            LogEvent("SMBios retrieval failed.", Region.Hardware, EventType.ERROR);
+            LogEvent($"{e}");
             GetWmiMemoryInfo();
         }
     }
@@ -345,18 +345,18 @@ public static partial class Cache
                     // If the EDID block is not 128 bytes, it does not match EDID specification 1.4 and should not be parsed.
                     if (data.Length != 128)
                     {
-                        await LogEventAsync($"Raw EDID block has invalid length: {data.Length}", Region.Hardware, EventType.ERROR);
-                        await LogEventAsync(BitConverter.ToString(data), Region.Hardware);
+                        LogEvent($"Raw EDID block has invalid length: {data.Length}", Region.Hardware, EventType.ERROR);
+                        LogEvent(BitConverter.ToString(data), Region.Hardware);
                     }
 
                     // Convert the raw byte array to an EDID information structure and add it to the list.
-                    await ParseEdid(data);
+                    ParseEdid(data);
                 }
                 catch { break; } //No more EDID blocks
             }
         }
     }
-    private static async Task ParseEdid(byte[] data)
+    private static void ParseEdid(byte[] data)
     {
         EdidData edidData = new();
         try
@@ -393,8 +393,8 @@ public static partial class Cache
         // An exception should not be possible here, but we catch it just in case.
         catch (Exception e)
         {
-            await LogEventAsync("Unexpected exception thrown when parsing EDID Information.", Region.Hardware, EventType.ERROR);
-            await LogEventAsync($"{e}", Region.Hardware);
+            LogEvent("Unexpected exception thrown when parsing EDID Information.", Region.Hardware, EventType.ERROR);
+            LogEvent($"{e}", Region.Hardware);
         }
         EdidData.Add(edidData);
     }
@@ -1235,7 +1235,7 @@ public static partial class Cache
     }
 
     // TEMPERATURES
-    private static async Task GetTemps()
+    private static void GetTemps()
     {
         //Any temp sensor reading below 24 will be filtered out
         //These sensors are either not reading in celsius, are in error, or we cannot interpret them properly here
@@ -1272,11 +1272,11 @@ public static partial class Cache
         }
         catch (OverflowException)
         {
-            await LogEventAsync("Absolute value overflow occured when fetching temperature data", Region.Hardware, EventType.ERROR);
+            LogEvent("Absolute value overflow occured when fetching temperature data", Region.Hardware, EventType.ERROR);
         }
         catch (Exception ex)
         {
-            await LogEventAsync($"Exception during temperature measurement: " + ex, Region.Hardware, EventType.ERROR);
+            LogEvent($"Exception during temperature measurement: " + ex, Region.Hardware, EventType.ERROR);
         }
         finally
         {
@@ -1287,7 +1287,7 @@ public static partial class Cache
     }
 
     // BATTERIES
-    private static async Task GetBatteryData()
+    private static void GetBatteryData()
     {
         List<BatteryData> BatteryInfo = new List<BatteryData>();
         string path =
@@ -1360,7 +1360,7 @@ public static partial class Cache
         }
 
         if (timer.Elapsed > timeout)
-            await LogEventAsync("Battery report was not generated before the timeout!", Region.Hardware, EventType.ERROR);
+            LogEvent("Battery report was not generated before the timeout!", Region.Hardware, EventType.ERROR);
 
         timer.Stop();
         cmd.Close();

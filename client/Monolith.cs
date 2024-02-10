@@ -64,7 +64,7 @@ public class Monolith
     public static async Task Specificialize()
     {
         DebugLog.CheckOpenTasks();
-        await DebugLog.LogEventAsync("Serialization starts");
+        DebugLog.LogEvent("Serialization starts");
         Monolith m;
         try
         {
@@ -72,17 +72,17 @@ public class Monolith
         }
         catch (Exception e)
         {
-            await DebugLog.LogFatalError(
+            DebugLog.LogFatalError(
                 $"Monolith creation failure during serialization. Specify cannot continue. {e}", DebugLog.Region.Misc);
             ProgramDone(ProgramDoneState.NoUpload); // this is intentional because it is neither a program fail nor an upload fail
             return;
         }
         Program.Time.Stop();
-        await DebugLog.LogEventAsync("Monolith created");
+        DebugLog.LogEvent("Monolith created");
         m.Meta.GenerationDate = DateTime.Now;
         m.DebugLogText = DebugLog.LogText;
         var serialized = m.Serialize();
-        await DebugLog.LogEventAsync("Monolith serialized");
+        DebugLog.LogEvent("Monolith serialized");
 
         if (Settings.RedactOneDriveCommercial)
         {
@@ -94,12 +94,12 @@ public class Monolith
             }
             catch (Exception e)
             {
-                await DebugLog.LogEventAsync("Commercial OneDrive redaction failed. Serialization restarts." + e, DebugLog.Region.Misc, DebugLog.EventType.ERROR);
+                DebugLog.LogEvent("Commercial OneDrive redaction failed. Serialization restarts." + e, DebugLog.Region.Misc, DebugLog.EventType.ERROR);
                 Settings.RedactOneDriveCommercial = false;
                 await Specificialize();
                 return;
             }
-            await DebugLog.LogEventAsync("Commercial OneDrive label redacted from report");
+            DebugLog.LogEvent("Commercial OneDrive label redacted from report");
         }
 
         if (Settings.RedactUsername)
@@ -119,7 +119,7 @@ public class Monolith
             // ... for USERNAME -> ... for [REDACTED]
             serialized = serialized.Replace($@"for {Cache.Username}", $@"for [REDACTED]");
 
-            await DebugLog.LogEventAsync("Username Redacted from report");
+            DebugLog.LogEvent("Username Redacted from report");
         }
 
         if (Settings.DontUpload)
@@ -130,8 +130,8 @@ public class Monolith
             var utf8WithoutBom = new UTF8Encoding(false);
             File.WriteAllText(filename, serialized, utf8WithoutBom);
 
-            await DebugLog.LogEventAsync($"Report saved to {filename}");
-            await DebugLog.StopDebugLog();
+            DebugLog.LogEvent($"Report saved to {filename}");
+            DebugLog.StopDebugLog();
             ProgramDone(ProgramDoneState.NoUpload);
             return;
         }
@@ -149,13 +149,13 @@ public class Monolith
         }
         catch (Exception e)
         {
-            await DebugLog.LogEventAsync($"JSON upload failed. Retrying serialization to local file.", DebugLog.Region.Misc, DebugLog.EventType.ERROR);
-            await DebugLog.LogEventAsync($"{e}", DebugLog.Region.Misc, DebugLog.EventType.INFORMATION);
+            DebugLog.LogEvent($"JSON upload failed. Retrying serialization to local file.", DebugLog.Region.Misc, DebugLog.EventType.ERROR);
+            DebugLog.LogEvent($"{e}", DebugLog.Region.Misc, DebugLog.EventType.INFORMATION);
             Settings.DontUpload = true;
             await Specificialize();
             return;
         }
-        await DebugLog.LogEventAsync($"File uploaded successfully: {url}", DebugLog.Region.Misc);
+        DebugLog.LogEvent($"File uploaded successfully: {url}", DebugLog.Region.Misc);
         var t = new Thread(() =>
         {
             Clipboard.SetText(url);
@@ -169,7 +169,7 @@ public class Monolith
         ProgramDone(ProgramDoneState.Normal);
 
         // Program ends here.
-        await DebugLog.StopDebugLog();
+        DebugLog.StopDebugLog();
     }
 
     private static async Task<string> DoRequest(string str)
@@ -183,14 +183,14 @@ public class Monolith
         request.Content = new StringContent(str);
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
 
-        await DebugLog.LogEventAsync("File sent. Awaiting HTTP Response.");
+        DebugLog.LogEvent("File sent. Awaiting HTTP Response.");
         try
         {
             var response = await client.SendAsync(request);
 
             if (!response.IsSuccessStatusCode)
             {
-                await DebugLog.LogEventAsync($"Unsuccessful HTTP Response: {response.StatusCode}", DebugLog.Region.Misc, DebugLog.EventType.ERROR);
+                DebugLog.LogEvent($"Unsuccessful HTTP Response: {response.StatusCode}", DebugLog.Region.Misc, DebugLog.EventType.ERROR);
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine("\nCould not upload. The file has been saved to specify_specs.json.");
                 Console.WriteLine($"Please go to {specifiedUploadDomain} to upload the file manually.");
@@ -204,8 +204,8 @@ public class Monolith
         }
         catch (Exception ex)
         {
-            await DebugLog.LogEventAsync($"Unsuccessful HTTP Request. An Unexpected Exception occured", DebugLog.Region.Misc, DebugLog.EventType.ERROR);
-            await DebugLog.LogEventAsync($"{ex}");
+            DebugLog.LogEvent($"Unsuccessful HTTP Request. An Unexpected Exception occured", DebugLog.Region.Misc, DebugLog.EventType.ERROR);
+            DebugLog.LogEvent($"{ex}");
             return null;
         }
     }

@@ -36,7 +36,7 @@ public static partial class Cache
         {
             List<Task> systemTaskList = new();
             Region region = Region.System;
-            await StartRegion(region);
+            StartRegion(region);
 
             systemTaskList.Add(DoTask(region, "GetEnvironmentVariables", GetEnvironmentVariables));
             systemTaskList.Add(DoTask(region, "GetSystemWMIInfo", GetSystemWMIInfo));
@@ -56,16 +56,16 @@ public static partial class Cache
             UsernameSpecialCharacters = !Regex.IsMatch(Environment.UserName, @"^[a-zA-Z0-9]+$");
 
             await Task.WhenAll(systemTaskList);
-            await EndRegion(region);
+            EndRegion(region);
         }
         catch (Exception ex)
         {
-            await LogFatalError($"{ex}", Region.System);
+            LogFatalError($"{ex}", Region.System);
         }
         SystemWriteSuccess = true;
     }
 
-    private static async Task GetProcesses()
+    private static void GetProcesses()
     {
         var outputProcesses = new List<OutputProcess>();
         var rawProcesses = Process.GetProcesses();
@@ -99,7 +99,7 @@ public static partial class Cache
                     if (!SystemProcesses.Contains(rawProcess.ProcessName))
                     {
                         exePath = "Not Found";
-                        await LogEventAsync($"System Data: Could not get the EXE path of {rawProcess.ProcessName} ({rawProcess.Id})", Region.System, EventType.WARNING);
+                        LogEvent($"System Data: Could not get the EXE path of {rawProcess.ProcessName} ({rawProcess.Id})", Region.System, EventType.WARNING);
                     }
                     else exePath = "SYSTEM";
                 }
@@ -108,8 +108,8 @@ public static partial class Cache
             catch (Win32Exception e)
             {
                 exePath = "null - See Debug Log.";
-                await LogEventAsync($"System Data: Could not get the EXE path of {rawProcess.ProcessName} ({rawProcess.Id})", Region.System, EventType.ERROR);
-                await LogEventAsync($"{e}", Region.System);
+                LogEvent($"System Data: Could not get the EXE path of {rawProcess.ProcessName} ({rawProcess.Id})", Region.System, EventType.ERROR);
+                LogEvent($"{e}", Region.System);
             }
 
             outputProcesses.Add(new OutputProcess
@@ -178,21 +178,21 @@ public static partial class Cache
         return InstalledApps;
     }
 
-    public static async Task<StartupTask> CreateStartupTask(string appName, string imagePath)
+    public static StartupTask CreateStartupTask(string appName, string imagePath)
     {
         StartupTask startupTask = new();
         startupTask.AppName = appName;
         if (string.IsNullOrEmpty(imagePath))
         {
             startupTask.ImagePath = "Image Path not found";
-            await LogEventAsync($"No ImagePath data found for {appName}", Region.System, EventType.WARNING);
+            LogEvent($"No ImagePath data found for {appName}", Region.System, EventType.WARNING);
             return startupTask;
         }
         else
         {
             startupTask.ImagePath = imagePath;
         }
-        startupTask = await GetFileInformation(startupTask);
+        startupTask = GetFileInformation(startupTask);
         return startupTask;
     }
 
@@ -210,14 +210,14 @@ public static partial class Cache
     // Group 2: HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
     // Group 3: HKLM\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Run
     // Group 4: %AppData%\Microsoft\Windows\Start Menu\Programs\Startup
-    public static async Task GetStartupTasks()
+    public static void GetStartupTasks()
     {
         List<StartupTask> startupTasks = new();
 
-        var group1TaskList = await GetStartupTasksAtKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", Registry.CurrentUser);
-        var group2TaskList = await GetStartupTasksAtKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", Registry.LocalMachine);
-        var group3TaskList = await GetStartupTasksAtKey(@"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run", Registry.LocalMachine);
-        var group4TaskList = await GetStartupTasksAtAppData();
+        var group1TaskList = GetStartupTasksAtKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", Registry.CurrentUser);
+        var group2TaskList = GetStartupTasksAtKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", Registry.LocalMachine);
+        var group3TaskList = GetStartupTasksAtKey(@"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run", Registry.LocalMachine);
+        var group4TaskList = GetStartupTasksAtAppData();
 
         startupTasks.AddRange(group1TaskList);
         startupTasks.AddRange(group2TaskList);
@@ -227,7 +227,7 @@ public static partial class Cache
         StartupTasks = startupTasks;
     }
 
-    private static async Task<List<StartupTask>> GetStartupTasksAtKey(string keyLocation, RegistryKey reg)
+    private static List<StartupTask> GetStartupTasksAtKey(string keyLocation, RegistryKey reg)
     {
         List<StartupTask> startupTasks = new();
         var key = reg.OpenSubKey(keyLocation);
@@ -235,14 +235,14 @@ public static partial class Cache
         {
             foreach (var appName in key.GetValueNames())
             {
-                var startupTask = await CreateStartupTask(appName, (string)key.GetValue(appName));
+                var startupTask = CreateStartupTask(appName, (string)key.GetValue(appName));
                 startupTasks.Add(startupTask);
             }
         }
         return startupTasks;
     }
 
-    private static async Task<List<StartupTask>> GetStartupTasksAtAppData()
+    private static List<StartupTask> GetStartupTasksAtAppData()
     {
         List<StartupTask> startupTasks = new();
         try
@@ -251,26 +251,26 @@ public static partial class Cache
             foreach (var file in startupFiles)
             {
                 string appName = Path.GetFileName(file);
-                var startupTask = await CreateStartupTask(appName, file);
+                var startupTask = CreateStartupTask(appName, file);
                 startupTasks.Add(startupTask);
             }
         }
         catch (Exception ex)
         {
-            await LogEventAsync($"File Read error in GetStartupTasksAtAppData", Region.System, EventType.ERROR);
-            await LogEventAsync($"{ex}", Region.System);
+            LogEvent($"File Read error in GetStartupTasksAtAppData", Region.System, EventType.ERROR);
+            LogEvent($"{ex}", Region.System);
         }
         return startupTasks;
     }
 
-    public static async Task<StartupTask> StartupTaskFileError(StartupTask startupTask, Exception ex)
+    public static StartupTask StartupTaskFileError(StartupTask startupTask, Exception ex)
     {
-        await LogEventAsync($"{startupTask.ImagePath} file not found for startup app {startupTask.AppName} - {ex}", Region.System, EventType.WARNING);
+        LogEvent($"{startupTask.ImagePath} file not found for startup app {startupTask.AppName} - {ex}", Region.System, EventType.WARNING);
         startupTask.ImagePath += " - FILE NOT FOUND";
         return startupTask;
     }
 
-    public static async Task<StartupTask> GetFileInformation(StartupTask startupTask)
+    public static StartupTask GetFileInformation(StartupTask startupTask)
     {
         //get information about an executable file
         var filePath = startupTask.ImagePath.Trim('\"');
@@ -285,7 +285,7 @@ public static partial class Cache
         }
         if (!File.Exists(filePath))
         {
-            return await StartupTaskFileError(startupTask, new FileNotFoundException($"{filePath}"));
+            return StartupTaskFileError(startupTask, new FileNotFoundException($"{filePath}"));
         }
 
         var timestamp = new FileInfo(filePath).LastWriteTime;
@@ -306,51 +306,51 @@ public static partial class Cache
 
         if (RecentMinidumps <= 0)
         {
-            await LogEventAsync("No current dumps found.", Region.System);
+            LogEvent("No current dumps found.", Region.System);
             return;
         }
 
         string[] dumps = Directory.GetFiles(dumpDir);
         if (dumps.Length == 0)
         {
-            await LogEventAsync($"Dumps could not be retrieved from {dumpDir}", Region.System, EventType.ERROR);
+            LogEvent($"Dumps could not be retrieved from {dumpDir}", Region.System, EventType.ERROR);
             return;
         }
 
-        await LogEventAsync("Dump Upload Requested.", Region.System);
+        LogEvent("Dump Upload Requested.", Region.System);
         if (MessageBox.Show("Would you like to upload your BSOD minidumps with your specs report?", "Minidumps detected", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.No)
         {
-            await LogEventAsync("Dump Upload Request Refused.", Region.System);
+            LogEvent("Dump Upload Request Refused.", Region.System);
             return;
         }
 
-        await LogEventAsync("Dump Upload Request Approved.", Region.System);
+        LogEvent("Dump Upload Request Approved.", Region.System);
 
         Directory.CreateDirectory(TempFolder);
 
-        if (!await CreateMinidumpZipFile(dumps, TempFolder, TempZip))
+        if (!CreateMinidumpZipFile(dumps, TempFolder, TempZip))
         {
-            await LogEventAsync("Dump zip file creation failure.", Region.System, EventType.ERROR);
+            LogEvent("Dump zip file creation failure.", Region.System, EventType.ERROR);
             return;
         }
 
-        await LogEventAsync("Dump zip file built. Attempting upload.", Region.System);
+        LogEvent("Dump zip file built. Attempting upload.", Region.System);
 
         result = await UploadMinidumps(TempZip, specifiedDumpDestination);
         if (string.IsNullOrEmpty(result))
         {
-            await LogEventAsync($"Dump upload failure. {result}", Region.System, EventType.ERROR);
+            LogEvent($"Dump upload failure. {result}", Region.System, EventType.ERROR);
             return;
         }
 
-        await LogEventAsync($"Dump file upload result: {result}", Region.System);
+        LogEvent($"Dump file upload result: {result}", Region.System);
         File.Delete(TempZip);
         new DirectoryInfo(TempFolder).Delete(true);
 
         DumpZip = result;
     }
 
-    private static async Task<bool> CreateMinidumpZipFile(string[] dumps, string TempFolder, string TempZip)
+    private static bool CreateMinidumpZipFile(string[] dumps, string TempFolder, string TempZip)
     {
         try
         {
@@ -362,7 +362,7 @@ public static partial class Cache
                 File.Copy(dump, fileName);
                 if (!File.Exists(fileName))
                 {
-                    await LogEventAsync($"Failed to copy {Regex.Match(dump, "[^\\\\]*$").Value} to dump folder.", Region.System, EventType.ERROR);
+                    LogEvent($"Failed to copy {Regex.Match(dump, "[^\\\\]*$").Value} to dump folder.", Region.System, EventType.ERROR);
                 }
                 else
                 {
@@ -379,8 +379,8 @@ public static partial class Cache
         }
         catch (Exception e)
         {
-            await LogEventAsync($"Error occured manipulating dump files! Is this running as admin?", Region.System, EventType.ERROR);
-            await LogEventAsync($"{e}", Region.System);
+            LogEvent($"Error occured manipulating dump files! Is this running as admin?", Region.System, EventType.ERROR);
+            LogEvent($"{e}", Region.System);
 
             return false; //If this failed, there's nothing more that can be done here.
         }
@@ -406,8 +406,8 @@ public static partial class Cache
             }
             catch (Exception e)
             {
-                await LogEventAsync($"Error occured when uploading dumps.zip to Specified!", Region.System, EventType.ERROR);
-                await LogEventAsync($"{e}", Region.System);
+                LogEvent($"Error occured when uploading dumps.zip to Specified!", Region.System, EventType.ERROR);
+                LogEvent($"{e}", Region.System);
             }
 
             client.Dispose();
@@ -415,7 +415,7 @@ public static partial class Cache
         return result;
     }
 
-    private static async Task GetMicroCodes()
+    private static void GetMicroCodes()
     {
         const string intelPath = @"C:\Windows\System32\mcupdate_genuineintel.dll";
         const string amdPath = @"C:\Windows\System32\mcupdate_authenticamd.dll";
@@ -427,7 +427,7 @@ public static partial class Cache
         MicroCodes = res;
     }
 
-    private static async Task GetStaticCoreCount()
+    private static void GetStaticCoreCount()
     {
         string output = string.Empty;
 
@@ -445,7 +445,7 @@ public static partial class Cache
             output = proc.StandardOutput.ReadToEnd();
             if (output.Contains("The boot configuration data store could not be opened"))
             {
-                await LogEventAsync("Could not check whether there is a static core count", Region.System, EventType.ERROR);
+                LogEvent("Could not check whether there is a static core count", Region.System, EventType.ERROR);
                 StaticCoreCount = null;
             }
             StaticCoreCount = output.Contains("numproc");
@@ -473,7 +473,7 @@ public static partial class Cache
         RecentMinidumps = count;
     }
 
-    private static async Task RegistryCheck()
+    private static void RegistryCheck()
     {
         try
         {
@@ -547,13 +547,13 @@ public static partial class Cache
         }
         catch (Exception ex)
         {
-            await LogEventAsync("Registry Read Error in RegistryCheck()", Region.System, EventType.ERROR);
-            await LogEventAsync($"{ex}");
+            LogEvent("Registry Read Error in RegistryCheck()", Region.System, EventType.ERROR);
+            LogEvent($"{ex}");
             ChoiceRegistryValues = new List<IRegistryValue>();
         }
     }
 
-    private static async Task GetBrowserExtensions()
+    private static void GetBrowserExtensions()
     {
         List<Browser> Browsers = new List<Browser>();
         string UserPath = string.Concat("C:\\Users\\", Username, "\\Appdata\\");
@@ -604,8 +604,8 @@ public static partial class Cache
                         }
                         catch (Exception e)
                         {
-                            await LogEventAsync($"Exception occurred in GetBrowserExtensions() during browser enumeration.", Region.System, EventType.ERROR);
-                            await LogEventAsync($"{e}");
+                            LogEvent($"Exception occurred in GetBrowserExtensions() during browser enumeration.", Region.System, EventType.ERROR);
+                            LogEvent($"{e}");
                         }
                     }
 
@@ -648,7 +648,7 @@ public static partial class Cache
                                 catch (Exception e)
                                 {
                                     if (e is FileNotFoundException || e is JsonException)
-                                        await LogEventAsync(string.Concat("Malformed or missing manifest or locale data for extension at ", edir), Region.System, EventType.WARNING);
+                                        LogEvent(string.Concat("Malformed or missing manifest or locale data for extension at ", edir), Region.System, EventType.WARNING);
                                     //DirectoryNotFoundException can occur with certain browsers when a profile exists but no extensions are installed
                                 }
                             }
@@ -680,7 +680,7 @@ public static partial class Cache
                                     catch (Exception e)
                                     {
                                         if (e is FileNotFoundException || e is JsonException)
-                                            await LogEventAsync(string.Concat("Malformed or missing manifest or locale data for extension at ", edir), Region.System, EventType.WARNING);
+                                            LogEvent(string.Concat("Malformed or missing manifest or locale data for extension at ", edir), Region.System, EventType.WARNING);
                                     }
                                 }
                             }
@@ -722,7 +722,7 @@ public static partial class Cache
                                 catch (Exception e)
                                 {
                                     if (e is FileNotFoundException || e is JsonException)
-                                        await LogEventAsync(string.Concat("Malformed or missing manifest or locale data for extension at ", edir), Region.System, EventType.WARNING);
+                                        LogEvent(string.Concat("Malformed or missing manifest or locale data for extension at ", edir), Region.System, EventType.WARNING);
                                     //DirectoryNotFoundException can occur with certain browsers when a profile exists but no extensions are installed
                                 }
                             }
@@ -742,7 +742,7 @@ public static partial class Cache
         BrowserExtensions = Browsers;
     }
 
-    private static async Task CheckCommercialOneDrive()
+    private static void CheckCommercialOneDrive()
     {
         bool ODFound = false;
         try
@@ -754,7 +754,7 @@ public static partial class Cache
                     pathOneDriveCommercial.Split(new string[] { "OneDrive - " }, StringSplitOptions.None)[1];
                 OneDriveCommercialPathLength = pathOneDriveCommercial.Length;
                 OneDriveCommercialNameLength = actualOneDriveCommercial.Length;
-                await LogEventAsync("OneDriveCommercial information retrieved.", Region.System);
+                LogEvent("OneDriveCommercial information retrieved.", Region.System);
                 ODFound = true;
             }
         }
@@ -765,17 +765,17 @@ public static partial class Cache
                 if (Settings.RedactOneDriveCommercial)
                 {
                     Settings.RedactOneDriveCommercial = false;
-                    await LogEventAsync("RedactOneDriveCommercial setting disabled. OneDriveCommercial variable not found.", Region.System, EventType.WARNING);
+                    LogEvent("RedactOneDriveCommercial setting disabled. OneDriveCommercial variable not found.", Region.System, EventType.WARNING);
                 }
                 else
                 {
-                    await LogEventAsync("OneDriveCommercial variable not found.", Region.System);
+                    LogEvent("OneDriveCommercial variable not found.", Region.System);
                 }
             }
         }
     }
 
-    private static async Task GetScheduledTasks()
+    private static void GetScheduledTasks()
     {
         var scheduledTasks = new List<ScheduledTask>();
         using var ts = new Microsoft.Win32.TaskScheduler.TaskService();
@@ -795,7 +795,7 @@ public static partial class Cache
         ScheduledTasks = scheduledTasks;
     }
 
-    private static async Task GetDefaultBrowser()
+    private static void GetDefaultBrowser()
     {
         try
         {
@@ -805,8 +805,8 @@ public static partial class Cache
         }
         catch (Exception e)
         {
-            await LogEventAsync("Could not detect default browser", Region.System, EventType.ERROR);
-            await LogEventAsync($"{e}", Region.System);
+            LogEvent("Could not detect default browser", Region.System, EventType.ERROR);
+            LogEvent($"{e}", Region.System);
         }
     }
 
@@ -823,13 +823,13 @@ public static partial class Cache
         }
     }
 
-    private static async Task GetEnvironmentVariables()
+    private static void GetEnvironmentVariables()
     {
         SystemVariables = Environment.GetEnvironmentVariables(EnvironmentVariableTarget.Machine);
         UserVariables = Environment.GetEnvironmentVariables(EnvironmentVariableTarget.User);
     }
 
-    private static async Task GetSystemWMIInfo()
+    private static void GetSystemWMIInfo()
     {
         Services = GetWmi("Win32_Service", "Name, Caption, PathName, StartMode, State");
         InstalledHotfixes = GetWmi("Win32_QuickFixEngineering", "Description,HotFixID,InstalledOn");

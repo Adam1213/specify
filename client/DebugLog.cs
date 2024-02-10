@@ -26,8 +26,7 @@ public static class DebugLog
     private const string LogFailureFilePath = "specify_log_failure.log";
     private static readonly ConcurrentDictionary<Region, RegionStats> StartedRegions = new();
     private static readonly ConcurrentDictionary<(Region region, string taskName), DateTime> OpenedTasks = new();
-
-    private static SemaphoreSlim logSemaphore = new(1, 1);
+    private static BlockingCollection<string> DebugLogQueue;
 
     public enum Region
     {
@@ -54,52 +53,52 @@ public static class DebugLog
 
     public static async Task DoTask(Region region, string taskName, Action task)
     {
-        await OpenTask(region, taskName);
+        OpenTask(region, taskName);
         try
         {
-            task.Invoke();
+            await Task.Run(task);
         }
         finally
         {
-            await CloseTask(region, taskName);
+            CloseTask(region, taskName);
         }
     }
 
     public static async Task DoTask(Region region, string taskName, Func<Task> task)
     {
-        await OpenTask(region, taskName);
+        OpenTask(region, taskName);
         try
         {
             await task();
         }
         finally
         {
-            await CloseTask(region, taskName);
+            CloseTask(region, taskName);
         }
     }
 
-    public static async Task OpenTask(Region region, string taskName)
+    public static void OpenTask(Region region, string taskName)
     {
         if (OpenedTasks.TryAdd((region, taskName), DateTime.Now)) //Will fail if already exists
         {
-            await LogEventAsync($"Task Started: {taskName}", region);
+            LogEvent($"Task Started: {taskName}", region);
         }
         // Ensure OpenTask hasn't been called twice on the same task.
         else
         {
-            await LogEventAsync($"{taskName} has already been started. This is a specify-specific error.", region, EventType.ERROR);
+            LogEvent($"{taskName} has already been started. This is a specify-specific error.", region, EventType.ERROR);
         }
     }
-    public static async Task CloseTask(Region region, string taskName)
+    public static void CloseTask(Region region, string taskName)
     {
         if (OpenedTasks.TryRemove((region, taskName), out DateTime startedAt)) //Will fail if already removed
         {
-            await LogEventAsync($"Task Completed: {taskName} - Runtime: {(DateTime.Now - startedAt).TotalMilliseconds}", region);
+            LogEvent($"Task Completed: {taskName} - Runtime: {(DateTime.Now - startedAt).TotalMilliseconds}", region);
         }
         // Ensure CloseTask hasn't been called on a task that was never opened, or called twice on the same task.
         else
         {
-            await LogEventAsync($"DebugLog Task could not be closed. Task was not in list. {taskName}", region, EventType.ERROR);
+            LogEvent($"DebugLog Task could not be closed. Task was not in list. {taskName}", region, EventType.ERROR);
         }
     }
     /// <summary>
@@ -118,27 +117,46 @@ public static class DebugLog
         }
     }
 
-    public static async Task StartDebugLog()
+    public static void StartDebugLog()
     {
         LogText = "";
         LogStartTime = DateTime.Now;
-        if (!File.Exists(LogFilePath) && Settings.EnableDebug)
-        {
-            File.Create(LogFilePath).Close();
-        }
-        else if (Settings.EnableDebug)
-        {
-            await Task.Run(() => File.WriteAllText(LogFilePath, ""));
-        }
+        Started = true;
 
         //Initializing region start/end time and error count is unnecessary
 
-        Started = true;
-        await LogEventAsync($"--- DEBUG LOG STARTED {LogStartTime.ToString("HH:mm:ss")} ---");
-        await LogSettings();
+        _ = Task.Run(DebugLogLoop);
+
+        LogEvent($"--- DEBUG LOG STARTED {LogStartTime.ToString("HH:mm:ss")} ---");
+        LogSettings();
     }
 
-    public static async Task StopDebugLog()
+    private static void DebugLogLoop()
+    {
+        DebugLogQueue = new BlockingCollection<string>(new ConcurrentQueue<string>());
+        using var writer = new StreamWriter(LogFilePath);
+        while (Started || DebugLogQueue.Any())
+        {
+            if (!DebugLogQueue.TryTake(out string debugString,200))
+                continue;
+
+            if (Settings.EnableDebug)
+            {
+                try
+                {
+                    writer.Write(debugString);
+                }
+                catch (Exception ex)
+                {
+                    File.WriteAllText(LogFailureFilePath, ex.ToString());
+                    Settings.EnableDebug = false;
+                }
+            }
+            LogText += debugString;
+        }
+    }
+
+    public static void StopDebugLog()
     {
         /*if(!Settings.EnableDebug)
         {
@@ -148,20 +166,20 @@ public static class DebugLog
         {
             if (!region.Value.EndTime.HasValue)
             {
-                await LogEventAsync($"Logging completed with unfinished region: {region.Key}", region.Key, EventType.ERROR);
+                LogEvent($"Logging completed with unfinished region: {region.Key}", region.Key, EventType.ERROR);
             }
             if (region.Value.errorCount > 0)
             {
-                await LogEventAsync($"{region.Key} Data Errors: {region.Value.errorCount}");
+                LogEvent($"{region.Key} Data Errors: {region.Value.errorCount}");
             }
         }
 
-        await LogEventAsync($"Total Elapsed Time: {(DateTime.Now - LogStartTime).TotalMilliseconds}");
-        await LogEventAsync($"--- DEBUG LOG FINISHED {DateTime.Now.ToString("HH:mm:ss")} ---");
+        LogEvent($"Total Elapsed Time: {(DateTime.Now - LogStartTime).TotalMilliseconds}");
+        LogEvent($"--- DEBUG LOG FINISHED {DateTime.Now.ToString("HH:mm:ss")} ---");
         Started = false;
     }
 
-    public static async Task StartRegion(Region region)
+    public static void StartRegion(Region region)
     {
         /*if(!Settings.EnableDebug)
         {
@@ -169,13 +187,13 @@ public static class DebugLog
         }*/
         if (!StartedRegions.TryAdd(region, new RegionStats() { startTime = DateTime.Now }))
         {
-            await LogEventAsync($"{region} Region already started.", region, EventType.ERROR);
+            LogEvent($"{region} Region already started.", region, EventType.ERROR);
             return;
         }
-        await LogEventAsync($"{region} Region Start", region, EventType.REGION_START);
+        LogEvent($"{region} Region Start", region, EventType.REGION_START);
     }
 
-    public static async Task EndRegion(Region region)
+    public static void EndRegion(Region region)
     {
         DateTime finishTime = DateTime.Now;
         /*if(!Settings.EnableDebug)
@@ -186,61 +204,18 @@ public static class DebugLog
         {
             if (regionStats.EndTime.HasValue)
             {
-                await LogEventAsync($"Region already completed.", region, EventType.ERROR);
+                LogEvent($"Region already completed.", region, EventType.ERROR);
                 return;
             }
 
-            await LogEventAsync($"{region} Region End - Total Time: {(finishTime - regionStats.startTime).TotalMilliseconds}ms", region, EventType.REGION_END);
+            LogEvent($"{region} Region End - Total Time: {(finishTime - regionStats.startTime).TotalMilliseconds}ms", region, EventType.REGION_END);
             regionStats.EndTime = finishTime;
             StartedRegions[region] = regionStats;
         }
         else
         {
-            await LogEventAsync($"Tried to end region that was not started.", region, EventType.ERROR);
+            LogEvent($"Tried to end region that was not started.", region, EventType.ERROR);
         }
-    }
-
-    public static async Task LogEventAsync(string message, Region region = Region.Misc, EventType type = EventType.INFORMATION)
-    {
-        if (!Started)
-        {
-            return;
-        }
-        string debugString = CreateDebugString(message, region, type);
-        if (region != Region.Misc && (!StartedRegions.TryGetValue(region, out RegionStats stats) || stats.EndTime.HasValue))
-        {
-            debugString = CreateDebugString($"Logging attempted on uninitialized region - {message}", region, EventType.ERROR);
-        }
-
-        if (Settings.EnableDebug)
-        {
-            await logSemaphore.WaitAsync();
-            int retryCount = 0;
-            while (true)
-            {
-                try
-                {
-                    var writer = new StreamWriter(LogFilePath, true);
-                    await writer.WriteAsync(debugString);
-                    writer.Close();
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    if (retryCount > 10)
-                    {
-                        File.WriteAllText(LogFailureFilePath, ex.ToString());
-                        Settings.EnableDebug = false;
-                        break;
-                    }
-                    await Task.Delay(30);
-                    retryCount++;
-                    continue;
-                }
-            }
-            logSemaphore.Release();
-        }
-        LogText += debugString;
     }
 
     public static void LogEvent(string message, Region region = Region.Misc, EventType type = EventType.INFORMATION)
@@ -249,40 +224,15 @@ public static class DebugLog
         {
             return;
         }
-        string debugString = CreateDebugString(message, region, type);
-        if (region != Region.Misc && (!StartedRegions.TryGetValue(region, out RegionStats stats ) || stats.EndTime.HasValue))
+        string debugString;
+        if (region != Region.Misc && (!StartedRegions.TryGetValue(region, out RegionStats stats) || stats.EndTime.HasValue))
         {
             debugString = CreateDebugString($"Logging attempted on uninitialized region - {message}", region, EventType.ERROR);
         }
-        if (Settings.EnableDebug)
-        {
-            logSemaphore.Wait();
-            int retryCount = 0;
-            while (true)
-            {
-                try
-                {
-                    var writer = new StreamWriter(LogFilePath, true);
-                    writer.Write(debugString);
-                    writer.Close();
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    if (retryCount > 10)
-                    {
-                        File.WriteAllText(LogFailureFilePath, ex.ToString());
-                        Settings.EnableDebug = false;
-                        break;
-                    }
-                    Thread.Sleep(30);
-                    retryCount++;
-                    continue;
-                }
-            }
-            logSemaphore.Release();
-        }
-        LogText += debugString;
+        else
+            debugString = CreateDebugString(message, region, type);
+
+        DebugLogQueue.Add(debugString);
     }
 
     private static string CreateDebugString(string message, Region region, EventType type)
@@ -318,7 +268,7 @@ public static class DebugLog
         if (type == EventType.ERROR)
         {
             debugString += " !!! ";
-            
+
             Interlocked.Increment(ref StartedRegions[region].errorCount);
         }
         if (type == EventType.REGION_START || type == EventType.REGION_END)
@@ -338,20 +288,20 @@ public static class DebugLog
         return debugString;
     }
 
-    private static async Task LogSettings()
+    private static void LogSettings()
     {
         var properties = typeof(Settings).GetProperties();
         foreach (PropertyInfo property in properties)
         {
-            await LogEventAsync($"{property.Name}: {property.GetValue(null)}");
+            LogEvent($"{property.Name}: {property.GetValue(null)}");
         }
     }
 
-    public static async Task LogFatalError(string message, Region region)
+    public static void LogFatalError(string message, Region region)
     {
         Settings.EnableDebug = true;
-        await LogEventAsync("UNEXPECTED FATAL EXCEPTION", region, EventType.ERROR);
-        await LogEventAsync(message, region, EventType.ERROR);
+        LogEvent("UNEXPECTED FATAL EXCEPTION", region, EventType.ERROR);
+        LogEvent(message, region, EventType.ERROR);
         while (true)
         {
             try
