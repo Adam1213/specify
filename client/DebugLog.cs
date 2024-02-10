@@ -125,7 +125,8 @@ public static class DebugLog
 
         //Initializing region start/end time and error count is unnecessary
 
-        _ = Task.Run(DebugLogLoop);
+        if (Settings.EnableDebug)
+            _ = Task.Run(DebugLogLoop);
 
         LogEvent($"--- DEBUG LOG STARTED {LogStartTime.ToString("HH:mm:ss")} ---");
         LogSettings();
@@ -232,7 +233,10 @@ public static class DebugLog
         else
             debugString = CreateDebugString(message, region, type);
 
-        DebugLogQueue.Add(debugString);
+        if (Settings.EnableDebug)
+            DebugLogQueue?.Add(debugString);
+
+        LogText += debugString;
     }
 
     private static string CreateDebugString(string message, Region region, EventType type)
