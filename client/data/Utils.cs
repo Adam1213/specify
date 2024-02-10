@@ -34,21 +34,9 @@ public static class Utils
     }
     public static List<Dictionary<string, object>> GetWmi(string cls, string selected = "*", string ns = @"root\cimv2")
     {
-        var collection = GetWmiObj(cls, selected, ns);
-        var res = new List<Dictionary<string, object>>();
-
-        foreach (var i in collection)
-        {
-            var tempD = new Dictionary<string, object>();
-            foreach (var j in i.Properties)
-            {
-                tempD[j.Name] = j.Value;
-            }
-
-            res.Add(tempD);
-        }
-
-        return res;
+        return GetWmiObj(cls, selected, ns).Cast<ManagementBaseObject>()
+            .Select(wmiObject => wmiObject.Properties.Cast<PropertyData>().ToDictionary(wmiProperty => wmiProperty.Name, wmiProperty => wmiProperty.Value))
+            .ToList();
     }
 
     /**
@@ -104,12 +92,12 @@ public static class Utils
         {
             var msg = $"Registry item {regKey.Name}\\{path}\\{name} cast to {nameof(T)} failed";
             DebugLog.LogEvent(msg, DebugLog.Region.System, DebugLog.EventType.ERROR);
-            if(typeof(T).Equals(typeof(int?)))
+            if (typeof(T).Equals(typeof(int?)))
             {
                 // -1111 to make it very obvious this is a cast failure. Some keys are set to -1 by optimizers. Nothing uses -1111.
                 return (T)(object)-1111;
             }
-            if(typeof(T).Equals(typeof(string)))
+            if (typeof(T).Equals(typeof(string)))
             {
                 return (T)(object)"Cast Failure";
             }
@@ -129,7 +117,7 @@ public static class Utils
             bool manifestName = false;
             bool manifestDescription = false;
 
-            if(!string.IsNullOrEmpty(manifest.name) && !string.IsNullOrEmpty(manifest.description))
+            if (!string.IsNullOrEmpty(manifest.name) && !string.IsNullOrEmpty(manifest.description))
             {
                 if (Regex.IsMatch(manifest.name, "MSG_(.+)") || Regex.IsMatch(manifest.description, "MSG_(.+)"))
                 {
@@ -138,7 +126,7 @@ public static class Utils
                     manifestDescription = Regex.IsMatch(manifest.description, "MSG_(.+)");
                 }
             }
-            if(localeData is null)
+            if (localeData is null)
             {
                 localeData = JObject.Parse("{}"); //Prevents NullReferenceException when locale does not exist
             }
