@@ -1287,7 +1287,7 @@ public static partial class Cache
     }
 
     // BATTERIES
-    private static void GetBatteryData()
+    private static async Task GetBatteryData()
     {
         List<BatteryData> BatteryInfo = new List<BatteryData>();
         string path =
@@ -1304,21 +1304,20 @@ public static partial class Cache
                 Arguments = "/batteryreport /xml",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                UseShellExecute = false
+                UseShellExecute = false, 
             }
         };
         cmd.Start();
+        bool completed = await Task.Run(()=>cmd.WaitForExit((int)TimeSpan.FromSeconds(60).TotalMilliseconds));
 
-        Stopwatch timer = Stopwatch.StartNew();
-        TimeSpan timeout = new TimeSpan().Add(TimeSpan.FromSeconds(60));
-
-        while (timer.Elapsed < timeout)
+        if (completed)
         {
-            if (File.Exists(Path.Combine(path, "battery-report.xml")) &&
+            FileInfo reportFile = new FileInfo(Path.Combine(path, "battery-report.xml"));
+            if (reportFile.Exists &&
                 Process.GetProcessesByName("powercfg").Length == 0)
             {
                 XmlDocument doc = new XmlDocument();
-                doc.Load(Path.Combine(path, "battery-report.xml"));
+                doc.Load(reportFile.FullName);
                 List<JToken> BatteryData =
                     JObject.Parse(JsonConvert.SerializeXmlNode(doc))["BatteryReport"]["Batteries"].Children().Children()
                         .ToList();
@@ -1341,8 +1340,7 @@ public static partial class Cache
                             });
                     }
 
-                File.Delete(Path.Combine(path, "battery-report.xml"));
-                break;
+                reportFile.Delete();
             }
             var errorReader = cmd.StandardError.ReadLine();
 
@@ -1355,14 +1353,11 @@ public static partial class Cache
                     severity = EventType.INFORMATION;
                 }
                 LogEvent($"PowerCfg reported an error: {errorReader}", Region.Hardware, severity);
-                break;
             }
         }
-
-        if (timer.Elapsed > timeout)
+        else
             LogEvent("Battery report was not generated before the timeout!", Region.Hardware, EventType.ERROR);
 
-        timer.Stop();
         cmd.Close();
         Batteries = BatteryInfo;
     }
