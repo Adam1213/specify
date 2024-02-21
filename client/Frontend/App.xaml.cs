@@ -32,5 +32,17 @@ public partial class App : Application
             MessageBox.Show($"Specify is unable to communicate with the Windows Management Instrumentation.\n{ex}", "Specify", MessageBoxButton.OK, MessageBoxImage.Error);
             Environment.Exit(-1);
         }
+
+        Cache.OpenComputer();
+    }
+
+    private void Application_Exit(object sender, ExitEventArgs e)
+    {
+        try
+        {
+            Cache.computer?.Close();
+            Cache.computer = null;
+        }
+        catch { }
     }
 }

@@ -14,6 +14,7 @@ using System.Xml;
 using System.Text;
 using System.ComponentModel;
 using static specify_client.Interop;
+using System.Threading;
 
 namespace specify_client.data;
 
@@ -22,6 +23,22 @@ using static Utils;
 
 public static partial class Cache
 {
+    public static Computer computer;
+    public static SemaphoreSlim waitComputerOpen = new SemaphoreSlim(0,1);
+
+    public static void OpenComputer()
+    {
+        computer = new Computer
+        {
+            IsCpuEnabled = true,
+            IsGpuEnabled = true,
+            IsMotherboardEnabled = true
+        };
+
+        Cache.computer.Open();
+        waitComputerOpen.Release();
+    }
+
     public static async Task MakeHardwareData()
     {
         try
@@ -1240,16 +1257,10 @@ public static partial class Cache
         //Any temp sensor reading below 24 will be filtered out
         //These sensors are either not reading in celsius, are in error, or we cannot interpret them properly here
         var Temps = new List<TempMeasurement>();
-        var computer = new Computer
-        {
-            IsCpuEnabled = true,
-            IsGpuEnabled = true,
-            IsMotherboardEnabled = true
-        };
 
         try
         {
-            computer.Open();
+            waitComputerOpen.WaitAsync(10000);
             computer.Accept(new SensorUpdateVisitor());
 
             foreach (var hardware in computer.Hardware)
