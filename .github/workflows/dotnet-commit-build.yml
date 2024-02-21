@@ -11,17 +11,17 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
       - name: Setup MSBuild 
-        uses: microsoft/setup-msbuild@v1
+        uses: microsoft/setup-msbuild@v2
         with:
           msbuild-architecture: x64
       - name: Setup NuGet
-        uses: NuGet/setup-nuget@v1
+        uses: NuGet/setup-nuget@v2
       - name: Install dependencies
         run: nuget restore client\client.sln
       - name: Build
         run: msbuild client\client.sln -property:Configuration=Release
       - name: Upload build
-        uses: actions/upload-artifact@v4.3.0
+        uses: actions/upload-artifact@v4.3.1
         with:
           name: specify_client_commit
           path: client\bin\Release\specify_client.exe
