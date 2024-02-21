@@ -21,7 +21,7 @@ public partial class Landing : Window
 
     public async Task RunApp()
     {
-        Frame.Navigate(new Run());
+        Dispatcher.Invoke(() => Frame.Navigate(new Run()));
         await Program.Main();
     }
 

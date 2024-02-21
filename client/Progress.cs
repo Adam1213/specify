@@ -56,8 +56,9 @@ public class ProgressList
             { "Events", new ProgressStatus("Event Logs", data.Cache.MakeEventData) },
             {
                 Specificializing,
-                new ProgressStatus(Specificializing, Monolith.Specificialize,
-                    new List<string>(){ "MainData", "SystemData", "Security", "Network", "Hardware" })
+                new ProgressStatus(Specificializing, Monolith.Specificialize
+                //,new List<string>(){ "MainData", "SystemData", "Security", "Network", "Hardware" }
+                )
             }
         };
     }

@@ -32,12 +32,14 @@ public class Program
             Time.Start();
             DebugLog.StartDebugLog();
             var pList = new ProgressList();
-            pList.RunItem("MainData");
-            pList.RunItem("SystemData");
-            pList.RunItem("Security");
-            pList.RunItem("Network");
-            pList.RunItem("Hardware");
-            pList.RunItem("Events");
+
+            await Task.WhenAll(data.Cache.MakeMainData()
+                , data.Cache.MakeSystemData()
+                , data.Cache.MakeSecurityData()
+                , data.Cache.MakeNetworkData()
+                , data.Cache.MakeHardwareData()
+                , data.Cache.MakeEventData());
+
             pList.RunItem(ProgressList.Specificializing);
         }
         catch (Exception ex)

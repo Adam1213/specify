@@ -2,6 +2,7 @@
 using System.Windows.Controls;
 using System;
 using System.Windows.Media;
+using System.Threading.Tasks;
 
 namespace specify_client;
 
@@ -68,17 +69,15 @@ public partial class StartButtons : Page
         DontUploadCheckbox.Foreground = new SolidColorBrush(Colors.Gray);
         WarningTextBlock.Visibility = Visibility.Hidden;
     }
-    private async void StartAction(object sender, RoutedEventArgs e)
+    private void StartAction(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            var main = App.Current.MainWindow as Landing;
-            await main.RunApp();
-        }
-        catch (Exception ex)
-        {
-            System.IO.File.WriteAllText(@"specify_hardfail.log", $"{ex}");
-            System.Environment.Exit(-1);
-        }
+        _ = Task.Run((App.Current.MainWindow as Landing).RunApp)
+            .ContinueWith(task =>
+            {
+
+                System.IO.File.WriteAllText(@"specify_hardfail.log", $"{task.Exception.InnerException}");
+                System.Environment.Exit(-1);
+            }, TaskContinuationOptions.OnlyOnFaulted);
+
     }
 }
