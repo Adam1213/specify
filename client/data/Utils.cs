@@ -107,12 +107,12 @@ public static class Utils
         {
             var msg = $"Registry item {regKey.Name}\\{path}\\{name} cast to {nameof(T)} failed";
             DebugLog.LogEvent(msg, DebugLog.Region.System, DebugLog.EventType.ERROR);
-            if(typeof(T).Equals(typeof(int?)))
+            if (typeof(T).Equals(typeof(int?)))
             {
                 // -1111 to make it very obvious this is a cast failure. Some keys are set to -1 by optimizers. Nothing uses -1111.
                 return (T)(object)-1111;
             }
-            if(typeof(T).Equals(typeof(string)))
+            if (typeof(T).Equals(typeof(string)))
             {
                 return (T)(object)"Cast Failure";
             }
@@ -124,53 +124,52 @@ public static class Utils
     {
         try
         {
+            string msgRegex = "MSG_(.+)";
             string ldir = string.Concat(Directory.GetDirectories(path).Last(), "\\_locales\\");
             JObject localeData = null;
             ChromiumManifest manifest = JsonConvert.DeserializeObject<ChromiumManifest>(
                 File.ReadAllText(string.Concat(Directory.GetDirectories(path).Last(), "\\manifest.json")));
 
-            bool manifestName = false;
-            bool manifestDescription = false;
+            string manifestName = manifest.name;
+            string manifestDescription = manifest.description;
 
-            if(!string.IsNullOrEmpty(manifest.name) && !string.IsNullOrEmpty(manifest.description))
+            string localeJsonPath = string.Concat(ldir, manifest.default_locale, "\\messages.json");
+            if (File.Exists(localeJsonPath))
             {
-                if (Regex.IsMatch(manifest.name, "MSG_(.+)") || Regex.IsMatch(manifest.description, "MSG_(.+)"))
+                try
                 {
-                    localeData = JObject.Parse(File.ReadAllText(string.Concat(ldir, manifest.default_locale, "\\messages.json")));
-                    manifestName = Regex.IsMatch(manifest.name, "MSG_(.+)");
-                    manifestDescription = Regex.IsMatch(manifest.description, "MSG_(.+)");
+
+                    localeData = JObject.Parse(File.ReadAllText(localeJsonPath));
+
+                    if (Regex.IsMatch(manifest.name, msgRegex))
+                    {
+                        JToken jName = localeData.GetValue(manifest.name.Substring(6, manifest.name.Length - 8), StringComparison.InvariantCultureIgnoreCase);
+                        var localName = (string)jName["message"];
+                        if (!string.IsNullOrEmpty(localName))
+                        {
+                            manifestName = localName;
+                        }
+                    }
+                    if (Regex.IsMatch(manifest.description, msgRegex))
+                    {
+                        JToken jDescription = localeData.GetValue(manifest.description.Substring(6, manifest.description.Length - 8), StringComparison.InvariantCultureIgnoreCase);
+                        string localDescription = (string)jDescription["message"];
+                        if (!string.IsNullOrEmpty(localDescription))
+                        {
+                            manifestDescription = localDescription;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    DebugLog.LogEvent($"Chromium extension locale json files corrupt or invalid.", DebugLog.Region.System, DebugLog.EventType.WARNING);
                 }
             }
-            if(localeData is null)
-            {
-                localeData = JObject.Parse("{}"); //Prevents NullReferenceException when locale does not exist
-            }
-            string fallbackName = "";
-            string fallbackDescription = "";
 
-            // I think there's an issue with this substring command, more testing will be required.
-            var jObj = localeData[manifest.name.Substring(6, manifest.name.Length - 8)];
-
-            if (!(jObj is null))
-            {
-                fallbackName = (string)jObj["message"];
-                if (string.IsNullOrEmpty(fallbackName))
-                {
-                    fallbackName = (string)jObj["message"];
-                }
-
-                fallbackDescription = (string)localeData[manifest.description.Substring(6, manifest.description.Length - 8)]["message"];
-                if (string.IsNullOrEmpty(fallbackDescription))
-                {
-                    fallbackDescription = (string)localeData[manifest.description.Substring(6, manifest.description.Length - 8).ToLower()]["message"];
-                }
-            }
             return new Browser.Extension()
             {
-                name = manifestName
-                ? fallbackName : manifest.name,
-                description = manifestDescription
-                ? fallbackDescription : manifest.description,
+                name = manifestName,
+                description = manifestDescription,
                 version = manifest.version
             };
         }
