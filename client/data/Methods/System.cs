@@ -34,7 +34,7 @@ public static partial class Cache
     {
         try
         {
-            
+
             Region region = Region.System;
             await StartRegion(region);
 
@@ -633,57 +633,58 @@ public static partial class Cache
                         Extensions = new List<Browser.Extension>()
                     };
                     //make sre the dirs actually exist
-                    if (Directory.Exists(string.Concat(UserPath, BrowserPath.Value, "Extensions")))
+                    DirectoryInfo extDir = new DirectoryInfo(string.Concat(UserPath, BrowserPath.Value, "Extensions"));
+                    if (extDir.Exists)
                     {
                         //Default profile logic needs to exist seperately due to OperaGX's AppData file structure.
-                        foreach (string edir in Directory.GetDirectories(string.Concat(UserPath, BrowserPath.Value, "Extensions")))
+                        foreach (DirectoryInfo edir in extDir.GetDirectories())
                         {
-                            if (!defaultExtensions.Contains(new DirectoryInfo(edir).Name))
-                            {
-                                if (new DirectoryInfo(edir).Name.Equals("Temp"))
-                                    continue;
+                            if (defaultExtensions.Contains(edir.Name))
+                                continue;
 
-                                try
-                                {
-                                    profile.Extensions.Add(ParseChromiumExtension(edir));
-                                }
-                                catch (Exception e)
-                                {
-                                    if (e is FileNotFoundException || e is JsonException)
-                                        await LogEventAsync(string.Concat("Malformed or missing manifest or locale data for extension at ", edir), Region.System, EventType.WARNING);
-                                    //DirectoryNotFoundException can occur with certain browsers when a profile exists but no extensions are installed
-                                }
+                            if (edir.Name.Equals("Temp"))
+                                continue;
+
+                            try
+                            {
+                                profile.Extensions.Add(ParseChromiumExtension(edir.FullName));
+                            }
+                            catch (Exception e)
+                            {
+                                if (e is FileNotFoundException || e is JsonException)
+                                    await LogEventAsync(string.Concat("Malformed or missing manifest or locale data for extension at ", edir.FullName), Region.System, EventType.WARNING);
+                                //DirectoryNotFoundException can occur with certain browsers when a profile exists but no extensions are installed
                             }
                         }
                     }
                     browser.Profiles.Add(profile);
 
-                    var sideProfilesPath = string.Concat(UserPath, BrowserPath.Value, "_side_profiles");
-                    if (Directory.Exists(sideProfilesPath))
+                    DirectoryInfo sideProfilesPath = new DirectoryInfo(string.Concat(UserPath, BrowserPath.Value, "_side_profiles"));
+                    if (sideProfilesPath.Exists)
                     {
                         //Fetch side profiles
-                        foreach (string pdir in Directory.GetDirectories(sideProfilesPath))
+                        foreach (DirectoryInfo pdir in sideProfilesPath.GetDirectories())
                         {
                             profile = JsonConvert.DeserializeObject<Browser.BrowserProfile>(
-                                File.ReadAllText(Directory.GetFiles(pdir, "*sideprofile.json")[0]));
+                                File.ReadAllText(pdir.GetFiles("*sideprofile.json")[0].FullName));
                             profile.Extensions = new List<Browser.Extension>();
 
-                            foreach (string edir in Directory.GetDirectories(string.Concat(pdir, "\\Extensions")))
+                            DirectoryInfo extensionsDir = new DirectoryInfo(string.Concat(pdir, "\\Extensions"));
+                            foreach (DirectoryInfo edir in extensionsDir.GetDirectories())
                             {
-                                if (!defaultExtensions.Contains(new DirectoryInfo(edir).Name))
-                                {
-                                    if (new DirectoryInfo(edir).Name.Equals("Temp"))
-                                        continue;
+                                if (defaultExtensions.Contains(edir.Name))
+                                    continue;
+                                if (edir.Name.Equals("Temp"))
+                                    continue;
 
-                                    try
-                                    {
-                                        profile.Extensions.Add(ParseChromiumExtension(edir));
-                                    }
-                                    catch (Exception e)
-                                    {
-                                        if (e is FileNotFoundException || e is JsonException)
-                                            await LogEventAsync(string.Concat("Malformed or missing manifest or locale data for extension at ", edir), Region.System, EventType.WARNING);
-                                    }
+                                try
+                                {
+                                    profile.Extensions.Add(ParseChromiumExtension(edir.FullName));
+                                }
+                                catch (Exception e)
+                                {
+                                    if (e is FileNotFoundException || e is JsonException)
+                                        await LogEventAsync(string.Concat("Malformed or missing manifest or locale data for extension at ", edir.FullName), Region.System, EventType.WARNING);
                                 }
                             }
 
@@ -712,19 +713,20 @@ public static partial class Cache
                         };
                         try
                         {
-                            foreach (string edir in Directory.GetDirectories(string.Concat(dir, "\\Extensions")))
+                            DirectoryInfo extDir = new DirectoryInfo(string.Concat(dir, "\\Extensions"));
+                            foreach (DirectoryInfo edir in extDir.GetDirectories())
                             {
-                                if (new DirectoryInfo(edir).Name.Equals("Temp"))
+                                if (edir.Name.Equals("Temp"))
                                     continue;
 
                                 try
                                 {
-                                    profile.Extensions.Add(ParseChromiumExtension(edir));
+                                    profile.Extensions.Add(ParseChromiumExtension(edir.FullName));
                                 }
                                 catch (Exception e)
                                 {
                                     if (e is FileNotFoundException || e is JsonException)
-                                        await LogEventAsync(string.Concat("Malformed or missing manifest or locale data for extension at ", edir), Region.System, EventType.WARNING);
+                                        await LogEventAsync(string.Concat("Malformed or missing manifest or locale data for extension at ", edir.FullName), Region.System, EventType.WARNING);
                                     //DirectoryNotFoundException can occur with certain browsers when a profile exists but no extensions are installed
                                 }
                             }
