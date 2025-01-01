@@ -451,7 +451,6 @@ public class Monolith
     public class MonolithNetwork
     {
         public List<Dictionary<string, object>> Adapters;
-        //public List<Dictionary<string, object>> Adapters2;
         public List<Dictionary<string, object>> Routes;
         public List<TCPConnection> NetworkConnections;
         public List<Dictionary<string, object>> UDPEndpoints;
@@ -464,7 +463,6 @@ public class Monolith
         public MonolithNetwork()
         {
             Adapters = Cache.NetAdapters;
-            //Adapters2 = Cache.NetAdapters2;
             Routes = Cache.IPRoutes;
             NetworkConnections = Cache.TCPConnections;
             UDPEndpoints = Cache.UDPEndpoints;
