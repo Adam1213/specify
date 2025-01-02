@@ -1,4 +1,5 @@
 using Microsoft.Win32;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -14,6 +15,30 @@ namespace specify_client.data;
 
 public static partial class Cache
 {
+    //We need to enumerate all network setting keys in registry, get instance ID to match with SettingID in WMI
+    private static void GetNetworkSettingsMapToWMI()
+    {
+        networkSettingWmiMap = new Dictionary<string, string>();
+        RegistryKey settingKeys = Registry.LocalMachine.OpenSubKey(@$"SYSTEM\CurrentControlSet\Control\Class\{{4d36e972-e325-11ce-bfc1-08002be10318}}");
+
+        foreach (string settingKeyName in settingKeys.GetSubKeyNames().Where(x => x.StartsWith("0"))) //Each network setting key is a 4-digit number padded with 0-s. Filtering to avoid reading unneeded `Configuration` and `Properties` keys.
+        {
+            RegistryKey settingKey = settingKeys.OpenSubKey(settingKeyName);
+            networkSettingWmiMap.Add((string)settingKey.GetValue("NetCfgInstanceId"), settingKeyName);
+        }
+    }
+   
+    private static void GetNetworkAdapterSettingFromRegistry(Dictionary<string,object> adapter, string valueName)
+    {
+        string regValue = Utils.GetRegistryValue<string>(Registry.LocalMachine, @$"SYSTEM\CurrentControlSet\Control\Class\{{4d36e972-e325-11ce-bfc1-08002be10318}}\{networkSettingWmiMap[(string)adapter["SettingID"]]}", valueName);
+        if (regValue != null)
+        {
+            adapter.Add(valueName, Utils.GetRegistryValue<string>(Registry.LocalMachine, @$"SYSTEM\CurrentControlSet\Control\Class\{{4d36e972-e325-11ce-bfc1-08002be10318}}\{networkSettingWmiMap[(string)adapter["SettingID"]]}\Ndi\Params\{valueName}\enum", regValue));
+        }
+    }
+
+    private static Dictionary<string, string> networkSettingWmiMap;
+
     public static async Task MakeNetworkData()
     {
         try
@@ -23,13 +48,14 @@ public static partial class Cache
             NetAdapters = Utils.GetWmi("Win32_NetworkAdapterConfiguration",
                 "Description, DHCPEnabled, DHCPServer, DNSDomain, DNSDomainSuffixSearchOrder, DNSHostName, "
                 + "DNSServerSearchOrder, IPEnabled, IPAddress, IPSubnet, DHCPLeaseObtained, DHCPLeaseExpires, "
-                + "DefaultIPGateway, MACAddress, InterfaceIndex");
+                + "DefaultIPGateway, MACAddress, InterfaceIndex, SettingId");
 
             IPRoutes = Utils.GetWmi("Win32_IP4RouteTable",
                 "Description, Destination, Mask, NextHop, Metric1, InterfaceIndex");
 
             await DebugLog.LogEventAsync("Networking WMI Information Retrieved.", region);
-
+            
+            GetNetworkSettingsMapToWMI();
             GetAdapterProperties();
             CombineAdapterInformation();
 
@@ -124,6 +150,7 @@ public static partial class Cache
         DebugLog.LogEvent($"GetTCPConnections() completed. Total Runtime {(DateTime.Now - start).TotalMilliseconds}", DebugLog.Region.Networking);
         return connectionsList;
     }
+
     private static void GetAdapterProperties()
     {
         var NICs = Utils.GetWmi("Win32_NetworkAdapter");
@@ -147,6 +174,19 @@ public static partial class Cache
             if (matchingAdapter.TryWmiRead("PhysicalAdapter", out bool physicalAdapter))
             {
                 adapter.Add("PhysicalAdapter", physicalAdapter);
+            }
+
+            try
+            {
+                GetNetworkAdapterSettingFromRegistry(adapter, "*SpeedDuplex");
+                GetNetworkAdapterSettingFromRegistry(adapter, "*WakeOnPattern");
+                GetNetworkAdapterSettingFromRegistry(adapter, "*WakeOnMagicPacket");
+                GetNetworkAdapterSettingFromRegistry(adapter, "IEEE11nMode");
+                GetNetworkAdapterSettingFromRegistry(adapter, "WirelessMode");
+            }
+            catch (NullReferenceException) //value does not exist
+            {
+
             }
         }
     }
@@ -229,6 +269,7 @@ public static partial class Cache
         adapter.Add("DNSIsStatic", Utils.GetRegistryValue<string>(Registry.LocalMachine, "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\" + (string)InterfaceGuid, "NameServer") != "");
 
     }
+
     private static Dictionary<string, string> GetAutoTuningLevels()
     {
         var autotuningLevels = new Dictionary<string, string>();
